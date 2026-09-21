@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación - Integral Definida del Caudal del Río Cauca</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .math-block {
+            background-color: #f1f5f9;
+            border-left: 4px solid #2563eb;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 p-4 md:p-8">
+
+<div class="max-w-7xl mx-auto space-y-6">
+
+    <header class="bg-white shadow-sm rounded-xl p-6 border border-slate-200">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 mb-1">
+                    Simulación: Cálculo de Volumen mediante Integrales
+                </h1>
+                <p class="text-slate-500 font-medium">
+                    Modelo lineal por segmentos aplicado a datos de caudal.
+                </p>
+            </div>
+
+            <div class="mt-4 md:mt-0 text-sm text-right bg-blue-50 text-blue-800 p-3 rounded-lg">
+                <p><strong>Río:</strong> Cauca</p>
+                <p><strong>Estación:</strong> La Virginia</p>
+                <p><strong>Departamento:</strong> Risaralda</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-5">
+        <h2 class="font-bold text-blue-900 mb-2">Objetivo de la simulación</h2>
+        <p class="text-blue-900 text-sm leading-relaxed">
+            Representar los datos de caudal mediante segmentos lineales y calcular
+            el volumen de agua asociado al área bajo la curva mediante una integral
+            definida. El factor 3600 convierte las horas a segundos para expresar
+            el resultado final en metros cúbicos.
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div class="space-y-6">
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold mb-4">Parámetros de cálculo</h2>
+
+                <label for="intervalSelect"
+                       class="block text-sm font-medium text-slate-600 mb-2">
+                    Seleccione el intervalo de integración:
+                </label>
+
+                <select id="intervalSelect"
+                        class="w-full bg-slate-50 border border-slate-300
+                               text-slate-900 rounded-lg p-2.5">
+                    <option value="first">Primer intervalo (0 - 6 horas)</option>
+                    <option value="full">Período completo (0 - 36 horas)</option>
+                </select>
+            </div>
+
+            <div class="bg-white overflow-hidden rounded-xl shadow-sm border border-slate-200">
+                <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h2 class="text-lg font-semibold">Datos utilizados</h2>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b">
+                        <tr>
+                            <th class="px-6 py-3 text-center">Tiempo t (h)</th>
+                            <th class="px-6 py-3 text-center">Caudal Q (m³/s)</th>
+                        </tr>
+                        </thead>
+
+                        <tbody id="dataTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="space-y-6 lg:col-span-2">
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold mb-4">
+                    Visualización de la integral
+                </h2>
+
+                <div class="relative h-80 w-full">
+                    <canvas id="integralChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-semibold mb-4">
+                    Procedimiento matemático
+                </h2>
+
+                <div id="mathContent" class="space-y-4 text-slate-700"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 class="text-lg font-semibold mb-3">Interpretación</h2>
+        <p class="text-slate-600 leading-relaxed">
+            El área bajo cada segmento representa la acumulación del caudal
+            durante el intervalo correspondiente. Al multiplicar por 3600 se
+            convierte el tiempo de horas a segundos, obteniendo el volumen
+            aproximado de agua en metros cúbicos. El modelo es exacto para los
+            segmentos lineales construidos a partir de los datos seleccionados,
+            pero representa una estimación del comportamiento real entre las
+            mediciones.
+        </p>
+    </div>
+
+</div>
+
+<script>
+
+const stationData = [
+    { t: 0,  q: 1162.18 },
+    { t: 6,  q: 1173.05 },
+    { t: 12, q: 1108.83 },
+    { t: 24, q: 1213.33 },
+    { t: 30, q: 1265.22 },
+    { t: 36, q: 1228.10 }
+];
+
+/* Tabla */
+const tbody = document.getElementById("dataTableBody");
+
+stationData.forEach((row, index) => {
+    const tr = document.createElement("tr");
+
+    tr.className = index % 2 === 0
+        ? "bg-white"
+        : "bg-slate-50";
+
+    tr.innerHTML = `
+        <td class="px-6 py-3 text-center border-b">
+            ${row.t}
+        </td>
+        <td class="px-6 py-3 text-center border-b">
+            ${row.q.toFixed(2)}
+        </td>
+    `;
+
+    tbody.appendChild(tr);
+});
+
+/* Gráfico */
+const ctx = document.getElementById("integralChart").getContext("2d");
+
+const pointsArray = stationData.map(d => ({
+    x: d.t,
+    y: d.q
+}));
+
+const chart = new Chart(ctx, {
+    type: "scatter",
+
+    data: {
+        datasets: [
+            {
+                label: "Caudal Q(t)",
+                data: pointsArray,
+                borderColor: "#2563eb",
+                backgroundColor: "#2563eb",
+                borderWidth: 2,
+                pointRadius: 5,
+                pointBackgroundColor: "#ffffff",
+                pointBorderColor: "#2563eb",
+                showLine: true,
+                tension: 0,
+                fill: false
+            },
+
+            {
+                label: "Área bajo la curva",
+                data: [],
+                backgroundColor: "rgba(59,130,246,0.22)",
+                borderColor: "transparent",
+                showLine: true,
+                tension: 0,
+                fill: "origin",
+                pointRadius: 0
+            }
+        ]
+    },
+
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: context =>
+                        `Caudal: ${context.parsed.y.toFixed(2)} m³/s`,
+
+                    title: context =>
+                        `Tiempo: ${context[0].parsed.x} h`
+                }
+            }
+        },
+
+        scales: {
+            x: {
+                type: "linear",
+                min: 0,
+                max: 36,
+
+                title: {
+                    display: true,
+                    text: "Tiempo t (horas)"
+                },
+
+                ticks: {
+                    stepSize: 6
+                }
+            },
+
+            y: {
+                min: 0,
+                max: 1400,
+
+                title: {
+                    display: true,
+                    text: "Caudal Q (m³/s)"
+                }
+            }
+        }
+    }
+});
+
+/* Cálculo de cada segmento */
+function calculateVolume(point1, point2) {
+
+    const deltaT = point2.t - point1.t;
+
+    const area =
+        deltaT * (point1.q + point2.q) / 2;
+
+    return 3600 * area;
+}
+
+function formatNumber(number) {
+
+    return number.toLocaleString("es-CO", {
+        maximumFractionDigits: 0
+    });
+}
+
+/* Actualización */
+function updateSimulation() {
+
+    const selection =
+        document.getElementById("intervalSelect").value;
+
+    const mathDiv =
+        document.getElementById("mathContent");
+
+    if (selection === "first") {
+
+        const p0 = stationData[0];
+        const p1 = stationData[1];
+
+        const deltaT = p1.t - p0.t;
+
+        const slope =
+            (p1.q - p0.q) / deltaT;
+
+        const volume =
+            calculateVolume(p0, p1);
+
+        chart.data.datasets[1].data = [
+            { x: p0.t, y: p0.q },
+            { x: p1.t, y: p1.q }
+        ];
+
+        chart.update();
+
+        mathDiv.innerHTML = `
+
+            <p>
+                Para el primer intervalo se construye el modelo lineal
+                entre los puntos
+                <strong>(0, 1162.18)</strong> y
+                <strong>(6, 1173.05)</strong>.
+            </p>
+
+            <div class="math-block p-4 rounded-lg font-mono text-sm space-y-2">
+
+                <p>
+                    f(t) = 1162.18 +
+                    ((1173.05 - 1162.18) / 6)t
+                </p>
+
+                <p>
+                    f(t) = 1162.18 + 1.8116667t
+                </p>
+
+                <p>
+                    0 ≤ t ≤ 6
+                </p>
+
+                <hr class="my-3">
+
+                <p>
+                    V₁ = 3600 ∫₀⁶ f(t) dt
+                </p>
+
+                <p>
+                    V₁ = 3600 ∫₀⁶
+                    (1162.18 + 1.8116667t) dt
+                </p>
+
+                <p>
+                    V₁ = 3600 [1162.18t +
+                    0.90583335t²]₀⁶
+                </p>
+
+                <p>
+                    ∫₀⁶ f(t)dt = 7005.69
+                </p>
+
+                <p class="text-lg font-bold text-blue-700">
+                    V₁ = 25.220.484 m³
+                </p>
+
+            </div>
+
+            <p class="italic">
+                El resultado corresponde al volumen calculado para el
+                primer intervalo de 0 a 6 horas.
+            </p>
+        `;
+
+    } else {
+
+        let totalVolume = 0;
+        let steps = "";
+
+        chart.data.datasets[1].data = pointsArray;
+        chart.update();
+
+        for (let i = 0; i < stationData.length - 1; i++) {
+
+            const pA = stationData[i];
+            const pB = stationData[i + 1];
+
+            const segmentVolume =
+                calculateVolume(pA, pB);
+
+            totalVolume += segmentVolume;
+
+            steps += `
+                <p>
+                    V<sub>${i + 1}</sub> =
+                    3600 · [(${pB.t} - ${pA.t})
+                    · (${pA.q} + ${pB.q}) / 2]
+                    =
+                    ${formatNumber(segmentVolume)} m³
+                </p>
+            `;
+        }
+
+        mathDiv.innerHTML = `
+
+            <p>
+                Para el período completo de
+                <strong>0 a 36 horas</strong>, se suman los volúmenes
+                correspondientes a los cinco segmentos lineales.
+            </p>
+
+            <div class="math-block p-4 rounded-lg font-mono text-sm space-y-2">
+
+                ${steps}
+
+                <hr class="my-3">
+
+                <p>
+                    V<sub>Total</sub> =
+                    V₁ + V₂ + V₃ + V₄ + V₅
+                </p>
+
+                <p>
+                    V<sub>Total</sub> =
+                    7.005.690 + 6.845.640 +
+                    13.932.960 + 7.435.650 +
+                    7.479.960
+                </p>
+
+                <p class="text-lg font-bold text-blue-700">
+                    V<sub>Total</sub> =
+                    ${formatNumber(totalVolume)} m³
+                </p>
+
+            </div>
+
+            <p class="italic">
+                El volumen total calculado para el período de 0 a 36 horas
+                es de
+                <strong>${formatNumber(totalVolume)} m³</strong>.
+            </p>
+        `;
+    }
+}
+
+document
+    .getElementById("intervalSelect")
+    .addEventListener("change", updateSimulation);
+
+updateSimulation();
+
+</script>
+
+</body>
+</html>
